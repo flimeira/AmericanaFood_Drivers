@@ -47,6 +47,26 @@ export interface Database {
           restaurant_id?: string
         }
       }
+      order_history: {
+        Row: {
+          id: number
+          created_at: string
+          order_id: number
+          action: string
+        }
+        Insert: {
+          id?: number
+          created_at?: string
+          order_id: number
+          action: string
+        }
+        Update: {
+          id?: number
+          created_at?: string
+          order_id?: number
+          action?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
