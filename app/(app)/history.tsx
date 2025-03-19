@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/supabase';
 import OrderHistoryCard from '@/components/OrderHistoryCard';
 import OrderHistoryFilter from '@/components/OrderHistoryFilter';
+import OrderHistorySummary from '@/components/OrderHistorySummary';
 
 type OrderHistory = Database['public']['Tables']['orders']['Row'] & {
   status_history: Array<{
@@ -125,6 +126,7 @@ export default function HistoryScreen() {
         onFilterChange={handleFilterChange}
         restaurants={restaurants}
       />
+      <OrderHistorySummary orders={orders} />
       <FlatList
         data={orders}
         renderItem={({ item }) => (
