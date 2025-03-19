@@ -48,7 +48,17 @@ export default function OrdersScreen() {
   };
 
   useEffect(() => {
+    // Busca inicial dos pedidos
     fetchOrders();
+
+    // Configura o timer para atualizar a cada minuto
+    const timer = setInterval(() => {
+      console.log('Atualizando pedidos via timer...');
+      fetchOrders();
+    }, 60000); // 60000 ms = 1 minuto
+
+    // Limpa o timer quando o componente é desmontado
+    return () => clearInterval(timer);
   }, []);
 
   const handleRefresh = () => {
