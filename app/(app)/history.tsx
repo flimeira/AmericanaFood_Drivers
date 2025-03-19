@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Text } from 'react-native';
+import { View, StyleSheet, FlatList, RefreshControl, Text, TouchableOpacity } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/supabase';
@@ -12,22 +12,31 @@ type OrderHistory = Database['public']['Tables']['orders']['Row'] & {
     action: string;
     created_at: string;
   }>;
+  payment_method: string;
+  delivery_address: string;
 };
+
+const ITEMS_PER_PAGE = 10;
 
 export default function HistoryScreen() {
   const [orders, setOrders] = useState<OrderHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [restaurants, setRestaurants] = useState<string[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
   const [filters, setFilters] = useState({
     status: null as string | null,
     restaurant: null as string | null,
     month: null as Date | null,
   });
 
-  const fetchOrderHistory = async () => {
+  const fetchOrderHistory = async (page: number = 1) => {
     try {
-      setLoading(true);
+      if (page === 1) {
+        setLoading(true);
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) return;
@@ -61,15 +70,19 @@ export default function HistoryScreen() {
       }
 
       // Ordenar por data de criação (mais recente primeiro)
-      query = query.order('created_at', { ascending: false });
+      query = query
+        .order('created_at', { ascending: false })
+        .range((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE - 1);
 
       const { data, error } = await query;
 
       if (error) throw error;
 
-      // Extrair restaurantes únicos para o filtro
-      const uniqueRestaurants = Array.from(new Set(data.map(order => order.restaurant_name)));
-      setRestaurants(uniqueRestaurants);
+      // Extrair restaurantes únicos para o filtro (apenas na primeira página)
+      if (page === 1) {
+        const uniqueRestaurants = Array.from(new Set(data.map(order => order.restaurant_name)));
+        setRestaurants(uniqueRestaurants);
+      }
 
       // Processar os dados para agrupar por order_id
       const processedOrders = data.reduce((acc: OrderHistory[], order) => {
@@ -89,7 +102,16 @@ export default function HistoryScreen() {
         );
       });
 
-      setOrders(processedOrders);
+      // Atualizar a lista de pedidos
+      if (page === 1) {
+        setOrders(processedOrders);
+      } else {
+        setOrders(prev => [...prev, ...processedOrders]);
+      }
+
+      // Verificar se há mais itens para carregar
+      setHasMore(processedOrders.length === ITEMS_PER_PAGE);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Error fetching order history:', error);
     } finally {
@@ -99,19 +121,45 @@ export default function HistoryScreen() {
   };
 
   useEffect(() => {
-    fetchOrderHistory();
+    setCurrentPage(1);
+    setHasMore(true);
+    fetchOrderHistory(1);
   }, [filters]);
 
   const handleRefresh = () => {
     setRefreshing(true);
-    fetchOrderHistory();
+    setCurrentPage(1);
+    setHasMore(true);
+    fetchOrderHistory(1);
+  };
+
+  const handleLoadMore = () => {
+    if (!loading && hasMore) {
+      fetchOrderHistory(currentPage + 1);
+    }
   };
 
   const handleFilterChange = (newFilters: typeof filters) => {
     setFilters(newFilters);
   };
 
-  if (loading && !refreshing) {
+  const renderFooter = () => {
+    if (!hasMore) return null;
+
+    return (
+      <TouchableOpacity 
+        style={styles.loadMoreButton}
+        onPress={handleLoadMore}
+        disabled={loading}
+      >
+        <Text style={styles.loadMoreText}>
+          {loading ? 'Carregando...' : 'Carregar mais'}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
+
+  if (loading && !refreshing && currentPage === 1) {
     return (
       <View style={styles.centerContainer}>
         <MaterialIcons name="hourglass-empty" size={48} color="#666" />
@@ -154,6 +202,7 @@ export default function HistoryScreen() {
             </Text>
           </View>
         }
+        ListFooterComponent={renderFooter}
       />
     </View>
   );
@@ -178,5 +227,14 @@ const styles = StyleSheet.create({
     color: '#666',
     marginTop: 8,
     textAlign: 'center',
+  },
+  loadMoreButton: {
+    padding: 16,
+    alignItems: 'center',
+  },
+  loadMoreText: {
+    color: '#1976d2',
+    fontSize: 14,
+    fontWeight: '500',
   },
 }); 

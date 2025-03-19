@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 type OrderHistoryFilterProps = {
   onFilterChange: (filters: {
@@ -11,99 +12,90 @@ type OrderHistoryFilterProps = {
   restaurants: string[];
 };
 
+const STATUS_OPTIONS = [
+  { label: 'Todos', value: null },
+  { label: 'Pendente', value: 'pending' },
+  { label: 'Aceito', value: 'accepted' },
+  { label: 'Entregue', value: 'delivered' },
+  { label: 'Recusado', value: 'rejected' },
+];
+
 export default function OrderHistoryFilter({ onFilterChange, restaurants }: OrderHistoryFilterProps) {
-  const [showStatusModal, setShowStatusModal] = useState(false);
-  const [showRestaurantModal, setShowRestaurantModal] = useState(false);
-  const [showDateModal, setShowDateModal] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [selectedRestaurant, setSelectedRestaurant] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<Date | null>(null);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [showRestaurantModal, setShowRestaurantModal] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
 
-  const statusOptions = [
-    { value: 'pending', label: 'Pendente' },
-    { value: 'accepted', label: 'Aceito' },
-    { value: 'delivered', label: 'Entregue' },
-    { value: 'rejected', label: 'Recusado' },
-  ];
-
-  const months = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() - i);
-    return date;
-  });
-
-  const handleStatusSelect = (status: string) => {
+  const handleStatusSelect = (status: string | null) => {
     setSelectedStatus(status);
     setShowStatusModal(false);
-    onFilterChange({ status, restaurant: selectedRestaurant, month: selectedMonth });
+    onFilterChange({
+      status,
+      restaurant: selectedRestaurant,
+      month: selectedMonth,
+    });
   };
 
-  const handleRestaurantSelect = (restaurant: string) => {
+  const handleRestaurantSelect = (restaurant: string | null) => {
     setSelectedRestaurant(restaurant);
     setShowRestaurantModal(false);
-    onFilterChange({ status: selectedStatus, restaurant, month: selectedMonth });
+    onFilterChange({
+      status: selectedStatus,
+      restaurant,
+      month: selectedMonth,
+    });
   };
 
-  const handleMonthSelect = (date: Date) => {
-    setSelectedMonth(date);
-    setShowDateModal(false);
-    onFilterChange({ status: selectedStatus, restaurant: selectedRestaurant, month: date });
+  const handleDateChange = (event: any, selectedDate?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (selectedDate) {
+      setSelectedMonth(selectedDate);
+      onFilterChange({
+        status: selectedStatus,
+        restaurant: selectedRestaurant,
+        month: selectedDate,
+      });
+    }
   };
 
-  const clearFilters = () => {
-    setSelectedStatus(null);
-    setSelectedRestaurant(null);
-    setSelectedMonth(null);
-    onFilterChange({ status: null, restaurant: null, month: null });
-  };
-
-  const formatMonthYear = (date: Date) => {
+  const formatMonth = (date: Date | null) => {
+    if (!date) return 'Todos os meses';
     return date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
   };
 
   return (
     <View style={styles.container}>
-      <View style={styles.filterRow}>
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setShowStatusModal(true)}
-        >
-          <MaterialIcons name="filter-list" size={20} color="#666" />
-          <Text style={styles.filterButtonText}>
-            {selectedStatus ? statusOptions.find(s => s.value === selectedStatus)?.label : 'Status'}
-          </Text>
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.filterButton}
+        onPress={() => setShowStatusModal(true)}
+      >
+        <MaterialIcons name="filter-list" size={20} color="#1976d2" />
+        <Text style={styles.filterButtonText}>
+          {selectedStatus ? STATUS_OPTIONS.find(s => s.value === selectedStatus)?.label : 'Status'}
+        </Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setShowRestaurantModal(true)}
-        >
-          <MaterialIcons name="restaurant" size={20} color="#666" />
-          <Text style={styles.filterButtonText}>
-            {selectedRestaurant || 'Restaurante'}
-          </Text>
-        </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.filterButton}
+        onPress={() => setShowRestaurantModal(true)}
+      >
+        <MaterialIcons name="restaurant" size={20} color="#1976d2" />
+        <Text style={styles.filterButtonText}>
+          {selectedRestaurant || 'Restaurante'}
+        </Text>
+      </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.filterButton}
-          onPress={() => setShowDateModal(true)}
-        >
-          <MaterialIcons name="calendar-today" size={20} color="#666" />
-          <Text style={styles.filterButtonText}>
-            {selectedMonth ? formatMonthYear(selectedMonth) : 'Mês/Ano'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {(selectedStatus || selectedRestaurant || selectedMonth) && (
-        <TouchableOpacity 
-          style={styles.clearButton}
-          onPress={clearFilters}
-        >
-          <MaterialIcons name="clear" size={16} color="#666" />
-          <Text style={styles.clearButtonText}>Limpar filtros</Text>
-        </TouchableOpacity>
-      )}
+      <TouchableOpacity
+        style={styles.filterButton}
+        onPress={() => setShowDatePicker(true)}
+      >
+        <MaterialIcons name="calendar-today" size={20} color="#1976d2" />
+        <Text style={styles.filterButtonText}>
+          {formatMonth(selectedMonth)}
+        </Text>
+      </TouchableOpacity>
 
       <Modal
         visible={showStatusModal}
@@ -113,20 +105,27 @@ export default function OrderHistoryFilter({ onFilterChange, restaurants }: Orde
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Filtrar por Status</Text>
-            {statusOptions.map((option) => (
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filtrar por Status</Text>
+              <TouchableOpacity onPress={() => setShowStatusModal(false)}>
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            {STATUS_OPTIONS.map((option) => (
               <TouchableOpacity
-                key={option.value}
+                key={option.value || 'all'}
                 style={[
                   styles.modalOption,
-                  selectedStatus === option.value && styles.modalOptionSelected
+                  selectedStatus === option.value && styles.modalOptionSelected,
                 ]}
                 onPress={() => handleStatusSelect(option.value)}
               >
-                <Text style={[
-                  styles.modalOptionText,
-                  selectedStatus === option.value && styles.modalOptionTextSelected
-                ]}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    selectedStatus === option.value && styles.modalOptionTextSelected,
+                  ]}
+                >
                   {option.label}
                 </Text>
               </TouchableOpacity>
@@ -143,20 +142,43 @@ export default function OrderHistoryFilter({ onFilterChange, restaurants }: Orde
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Filtrar por Restaurante</Text>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filtrar por Restaurante</Text>
+              <TouchableOpacity onPress={() => setShowRestaurantModal(false)}>
+                <MaterialIcons name="close" size={24} color="#666" />
+              </TouchableOpacity>
+            </View>
+            <TouchableOpacity
+              style={[
+                styles.modalOption,
+                !selectedRestaurant && styles.modalOptionSelected,
+              ]}
+              onPress={() => handleRestaurantSelect(null)}
+            >
+              <Text
+                style={[
+                  styles.modalOptionText,
+                  !selectedRestaurant && styles.modalOptionTextSelected,
+                ]}
+              >
+                Todos os restaurantes
+              </Text>
+            </TouchableOpacity>
             {restaurants.map((restaurant) => (
               <TouchableOpacity
                 key={restaurant}
                 style={[
                   styles.modalOption,
-                  selectedRestaurant === restaurant && styles.modalOptionSelected
+                  selectedRestaurant === restaurant && styles.modalOptionSelected,
                 ]}
                 onPress={() => handleRestaurantSelect(restaurant)}
               >
-                <Text style={[
-                  styles.modalOptionText,
-                  selectedRestaurant === restaurant && styles.modalOptionTextSelected
-                ]}>
+                <Text
+                  style={[
+                    styles.modalOptionText,
+                    selectedRestaurant === restaurant && styles.modalOptionTextSelected,
+                  ]}
+                >
                   {restaurant}
                 </Text>
               </TouchableOpacity>
@@ -165,98 +187,67 @@ export default function OrderHistoryFilter({ onFilterChange, restaurants }: Orde
         </View>
       </Modal>
 
-      <Modal
-        visible={showDateModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowDateModal(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Selecionar Mês/Ano</Text>
-            <ScrollView style={styles.monthList}>
-              {months.map((date) => (
-                <TouchableOpacity
-                  key={date.toISOString()}
-                  style={[
-                    styles.modalOption,
-                    selectedMonth?.toISOString() === date.toISOString() && styles.modalOptionSelected
-                  ]}
-                  onPress={() => handleMonthSelect(date)}
-                >
-                  <Text style={[
-                    styles.modalOptionText,
-                    selectedMonth?.toISOString() === date.toISOString() && styles.modalOptionTextSelected
-                  ]}>
-                    {formatMonthYear(date)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {showDatePicker && (
+        <DateTimePicker
+          value={selectedMonth || new Date()}
+          mode="date"
+          display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+          onChange={handleDateChange}
+          maximumDate={new Date()}
+        />
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
     padding: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
-  },
-  filterRow: {
-    flexDirection: 'row',
-    gap: 8,
+    borderBottomColor: '#f0f0f0',
   },
   filterButton: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    padding: 8,
     backgroundColor: '#f5f5f5',
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginRight: 8,
   },
   filterButtonText: {
+    marginLeft: 4,
     fontSize: 14,
-    color: '#666',
-  },
-  clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    marginTop: 8,
-    padding: 8,
-  },
-  clearButtonText: {
-    fontSize: 14,
-    color: '#666',
+    color: '#1976d2',
   },
   modalContainer: {
     flex: 1,
-    justifyContent: 'flex-end',
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     padding: 16,
     maxHeight: '80%',
   },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   modalTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontWeight: '600',
     color: '#333',
   },
   modalOption: {
-    padding: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
     borderRadius: 8,
     marginBottom: 8,
   },
@@ -270,8 +261,5 @@ const styles = StyleSheet.create({
   modalOptionTextSelected: {
     color: '#1976d2',
     fontWeight: '500',
-  },
-  monthList: {
-    maxHeight: 400,
   },
 }); 

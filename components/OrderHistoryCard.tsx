@@ -1,201 +1,242 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Database } from '@/types/supabase';
 
-type Order = Database['public']['Tables']['orders']['Row'];
+type OrderHistory = Database['public']['Tables']['orders']['Row'] & {
+  status_history: Array<{
+    action: string;
+    created_at: string;
+  }>;
+  payment_method: string;
+  delivery_address: string;
+};
 
 type OrderHistoryCardProps = {
-  order: Order;
+  order: OrderHistory;
   statusHistory: Array<{
     action: string;
     created_at: string;
   }>;
 };
 
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'pending':
+      return '#ffa000';
+    case 'accepted':
+      return '#1976d2';
+    case 'delivered':
+      return '#388e3c';
+    case 'rejected':
+      return '#d32f2f';
+    default:
+      return '#757575';
+  }
+};
+
+const translateStatus = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'pending':
+      return 'Pendente';
+    case 'accepted':
+      return 'Aceito';
+    case 'delivered':
+      return 'Entregue';
+    case 'rejected':
+      return 'Recusado';
+    default:
+      return status;
+  }
+};
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return date.toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
+
 export default function OrderHistoryCard({ order, statusHistory }: OrderHistoryCardProps) {
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('pt-BR', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [rotateAnimation] = useState(new Animated.Value(0));
+
+  const toggleExpand = () => {
+    setIsExpanded(!isExpanded);
+    Animated.timing(rotateAnimation, {
+      toValue: isExpanded ? 0 : 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return '#4caf50';
-      case 'rejected':
-        return '#f44336';
-      case 'accepted':
-        return '#2196f3';
-      default:
-        return '#ffa000';
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'delivered':
-        return 'check-circle';
-      case 'rejected':
-        return 'cancel';
-      case 'accepted':
-        return 'delivery-dining';
-      default:
-        return 'schedule';
-    }
-  };
-
-  const isDelivered = order.status === 'delivered';
-  const isRejected = order.status === 'rejected';
+  const rotate = rotateAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '180deg'],
+  });
 
   return (
-    <View style={[
-      styles.container,
-      isDelivered && styles.deliveredContainer,
-      isRejected && styles.rejectedContainer
-    ]}>
-      <View style={styles.header}>
-        <View style={styles.orderInfo}>
-          <Text style={styles.orderNumber}>Pedido #{order.id}</Text>
-          {isDelivered && (
-            <View style={styles.badge}>
-              <MaterialIcons name="check" size={12} color="#4caf50" />
-              <Text style={[styles.badgeText, { color: '#4caf50' }]}>Entregue</Text>
-            </View>
-          )}
-          {isRejected && (
-            <View style={styles.badge}>
-              <MaterialIcons name="close" size={12} color="#f44336" />
-              <Text style={[styles.badgeText, { color: '#f44336' }]}>Recusado</Text>
-            </View>
-          )}
-        </View>
-        <Text style={styles.restaurantName}>{order.restaurant_name}</Text>
-        {!isRejected && (
-          <Text style={styles.amount}>
-            R$ {Number(order.total_amount).toFixed(2)}
-          </Text>
-        )}
-      </View>
-
-      <View style={styles.timeline}>
-        {statusHistory.map((status, index) => (
-          <View key={index} style={styles.timelineItem}>
-            <View style={styles.timelineIconContainer}>
-              <View style={[styles.timelineDot, { backgroundColor: getStatusColor(order.status) }]} />
-              {index < statusHistory.length - 1 && (
-                <View style={[styles.timelineLine, { backgroundColor: getStatusColor(order.status) }]} />
-              )}
-            </View>
-            <View style={styles.timelineContent}>
-              <Text style={styles.timelineAction}>{status.action}</Text>
-              <Text style={styles.timelineDate}>{formatDate(status.created_at)}</Text>
+    <View style={styles.card}>
+      <TouchableOpacity onPress={toggleExpand} style={styles.header}>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.orderNumber}>Pedido #{order.id}</Text>
+            <Text style={styles.restaurantName}>{order.restaurant_name}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            <Text style={styles.totalAmount}>
+              R$ {order.total_amount.toFixed(2)}
+            </Text>
+            <View style={[styles.statusBadge, { backgroundColor: getStatusColor(order.status) }]}>
+              <Text style={styles.statusText}>{translateStatus(order.status)}</Text>
             </View>
           </View>
-        ))}
-      </View>
+        </View>
+        <Animated.View style={{ transform: [{ rotate }] }}>
+          <MaterialIcons name="expand-more" size={24} color="#666" />
+        </Animated.View>
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <View style={styles.content}>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Histórico de Status</Text>
+            {statusHistory.map((status, index) => (
+              <View key={index} style={styles.statusItem}>
+                <View style={styles.statusDot} />
+                <View style={styles.statusInfo}>
+                  <Text style={styles.statusAction}>{status.action}</Text>
+                  <Text style={styles.statusDate}>{formatDate(status.created_at)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Detalhes do Pedido</Text>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Data do Pedido:</Text>
+              <Text style={styles.detailValue}>{formatDate(order.created_at)}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Forma de Pagamento:</Text>
+              <Text style={styles.detailValue}>{order.payment_method}</Text>
+            </View>
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Endereço de Entrega:</Text>
+              <Text style={styles.detailValue}>{order.delivery_address}</Text>
+            </View>
+          </View>
+        </View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  card: {
     backgroundColor: '#fff',
     borderRadius: 12,
-    padding: 16,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-  },
-  deliveredContainer: {
-    borderColor: '#4caf50',
-    borderWidth: 2,
-    backgroundColor: '#f1f8e9',
-  },
-  rejectedContainer: {
-    borderColor: '#f44336',
-    borderWidth: 2,
-    backgroundColor: '#ffebee',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   header: {
-    marginBottom: 16,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
-  orderInfo: {
+  headerContent: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  headerRight: {
+    alignItems: 'flex-end',
   },
   orderNumber: {
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '500',
   },
   restaurantName: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
+    marginTop: 4,
   },
-  amount: {
+  totalAmount: {
     fontSize: 16,
+    fontWeight: '600',
+    color: '#1976d2',
+    marginBottom: 8,
+  },
+  statusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 16,
+  },
+  statusText: {
+    color: '#fff',
+    fontSize: 12,
     fontWeight: '500',
-    color: '#333',
+    textTransform: 'capitalize',
   },
-  timeline: {
-    marginTop: 16,
+  content: {
+    padding: 16,
   },
-  timelineItem: {
-    flexDirection: 'row',
+  section: {
     marginBottom: 16,
   },
-  timelineIconContainer: {
-    width: 24,
-    alignItems: 'center',
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
   },
-  timelineDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#2196f3',
+  statusItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
-  timelineLine: {
-    width: 2,
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1976d2',
+    marginTop: 6,
+    marginRight: 12,
+  },
+  statusInfo: {
     flex: 1,
-    backgroundColor: '#2196f3',
-    marginTop: 4,
-    marginBottom: -12,
   },
-  timelineContent: {
-    flex: 1,
-    marginLeft: 12,
-    marginTop: -4,
-  },
-  timelineAction: {
+  statusAction: {
     fontSize: 14,
     color: '#333',
     marginBottom: 2,
   },
-  timelineDate: {
+  statusDate: {
     fontSize: 12,
     color: '#666',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#666',
+    width: 120,
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#333',
+    flex: 1,
   },
 }); 
