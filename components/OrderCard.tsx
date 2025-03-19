@@ -3,21 +3,23 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { Database } from '@/types/supabase';
 
-type OrderCardProps = {
-  order: {
-    id: string;
-    order_number: string;
-    Customer_Address: string;
-    restaurant_name: string;
-    total_amount: number;
-    status: string;
-  };
+type Order = Database['public']['Tables']['orders']['Row'];
+
+interface OrderCardProps {
+  order: Order;
   onStatusChange: (orderId: string, newStatus: string) => void;
-};
+  onViewRoute: (order: Order) => void;
+}
 
-export default function OrderCard({ order, onStatusChange }: OrderCardProps) {
+export default function OrderCard({ order, onStatusChange, onViewRoute }: OrderCardProps) {
   const router = useRouter();
+
+  React.useEffect(() => {
+    console.log('OrderCard montado com pedido:', order);
+    console.log('Endereço do pedido:', order.customer_address);
+  }, [order]);
 
   const handleAccept = async () => {
     try {
@@ -61,30 +63,51 @@ export default function OrderCard({ order, onStatusChange }: OrderCardProps) {
     }
   };
 
-  const handleViewRoute = () => {
-    // Aqui você pode implementar a navegação para a tela de rota
-    // usando as coordenadas do endereço de entrega
-    Alert.alert('Funcionalidade em desenvolvimento', 'Visualização de rota em breve');
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return '#ffa000';
+      case 'accepted':
+        return '#1976d2';
+      case 'delivered':
+        return '#388e3c';
+      case 'rejected':
+        return '#d32f2f';
+      default:
+        return '#757575';
+    }
   };
 
-  // Debug para verificar os dados recebidos
-  console.log('Order data:', order);
+  const translateStatus = (status: string) => {
+    switch (status) {
+      case 'pending':
+        return 'Pendente';
+      case 'accepted':
+        return 'Aceito';
+      case 'delivered':
+        return 'Entregue';
+      case 'rejected':
+        return 'Recusado';
+      default:
+        return status;
+    }
+  };
 
   return (
-    <View style={styles.card}>
+    <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.orderNumber}>Pedido #{order.order_number}</Text>
-        <Text style={styles.restaurant}>{order.restaurant_name}</Text>
+        <Text style={styles.restaurantName}>{order.restaurant_name}</Text>
       </View>
 
       <View style={styles.content}>
-        <View style={styles.addressContainer}>
-          <MaterialIcons name="location-on" size={20} color="#666" />
-          <Text style={styles.address} numberOfLines={2}>
-            {order.Customer_Address || 'Endereço não disponível'}
-          </Text>
+        <View style={styles.statusContainer}>
+          <View style={[styles.statusDot, { backgroundColor: getStatusColor(order.status) }]} />
+          <Text style={styles.statusText}>{translateStatus(order.status)}</Text>
         </View>
-        <Text style={styles.amount}>R$ {order.total_amount.toFixed(2)}</Text>
+
+        <Text style={styles.address}>{order.customer_address}</Text>
+        <Text style={styles.total}>Total: R$ {order.total_amount.toFixed(2)}</Text>
       </View>
 
       <View style={styles.actions}>
@@ -94,34 +117,44 @@ export default function OrderCard({ order, onStatusChange }: OrderCardProps) {
               style={[styles.button, styles.acceptButton]}
               onPress={handleAccept}
             >
-              <MaterialIcons name="check-circle" size={20} color="#fff" />
+              <MaterialIcons name="check" size={24} color="#fff" />
               <Text style={styles.buttonText}>Aceitar</Text>
             </TouchableOpacity>
+
             <TouchableOpacity
               style={[styles.button, styles.rejectButton]}
               onPress={handleReject}
             >
-              <MaterialIcons name="cancel" size={20} color="#fff" />
+              <MaterialIcons name="close" size={24} color="#fff" />
               <Text style={styles.buttonText}>Recusar</Text>
             </TouchableOpacity>
           </>
         )}
-        
+
         {order.status === 'accepted' && (
           <TouchableOpacity
             style={[styles.button, styles.deliverButton]}
             onPress={handleDeliver}
           >
-            <MaterialIcons name="local-shipping" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Entregue</Text>
+            <MaterialIcons name="local-shipping" size={24} color="#fff" />
+            <Text style={styles.buttonText}>Entregar</Text>
           </TouchableOpacity>
         )}
 
         <TouchableOpacity
           style={[styles.button, styles.routeButton]}
-          onPress={handleViewRoute}
+          onPress={() => {
+            if (!order.customer_address) {
+              Alert.alert('Erro', 'Endereço não encontrado para este pedido');
+              return;
+            }
+            console.log('Botão Ver Rota clicado');
+            console.log('Pedido:', JSON.stringify(order, null, 2));
+            console.log('Endereço:', order.customer_address);
+            onViewRoute(order);
+          }}
         >
-          <MaterialIcons name="directions" size={20} color="#fff" />
+          <MaterialIcons name="directions" size={24} color="#fff" />
           <Text style={styles.buttonText}>Ver Rota</Text>
         </TouchableOpacity>
       </View>
@@ -130,9 +163,9 @@ export default function OrderCard({ order, onStatusChange }: OrderCardProps) {
 }
 
 const styles = StyleSheet.create({
-  card: {
+  container: {
     backgroundColor: '#fff',
-    borderRadius: 12,
+    borderRadius: 8,
     padding: 16,
     marginBottom: 16,
     elevation: 2,
@@ -152,54 +185,62 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  restaurant: {
+  restaurantName: {
     fontSize: 14,
     color: '#666',
   },
   content: {
     marginBottom: 16,
   },
-  addressContainer: {
+  statusContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 8,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 8,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#666',
   },
   address: {
     fontSize: 14,
-    color: '#666',
-    marginLeft: 8,
-    flex: 1,
+    color: '#333',
+    marginBottom: 8,
   },
-  amount: {
-    fontSize: 18,
+  total: {
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#2ecc71',
+    color: '#1976d2',
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: 8,
   },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 8,
-    borderRadius: 8,
-    flex: 1,
-    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 4,
     gap: 4,
   },
   acceptButton: {
-    backgroundColor: '#2ecc71',
+    backgroundColor: '#388e3c',
   },
   rejectButton: {
-    backgroundColor: '#e74c3c',
+    backgroundColor: '#d32f2f',
   },
   deliverButton: {
-    backgroundColor: '#3498db',
+    backgroundColor: '#1976d2',
   },
   routeButton: {
-    backgroundColor: '#9b59b6',
+    backgroundColor: '#ffa000',
   },
   buttonText: {
     color: '#fff',

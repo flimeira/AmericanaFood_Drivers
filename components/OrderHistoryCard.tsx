@@ -9,7 +9,6 @@ type OrderHistory = Database['public']['Tables']['orders']['Row'] & {
     created_at: string;
   }>;
   payment_method: string;
-  delivery_address: string;
 };
 
 type OrderHistoryCardProps = {
@@ -128,7 +127,7 @@ export default function OrderHistoryCard({ order, statusHistory }: OrderHistoryC
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Endereço de Entrega:</Text>
-              <Text style={styles.detailValue}>{order.delivery_address}</Text>
+              <Text style={styles.detailValue}>{order.Customer_Address}</Text>
             </View>
           </View>
         </View>

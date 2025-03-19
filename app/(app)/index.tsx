@@ -1,37 +1,46 @@
-import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, RefreshControl, Text } from 'react-native';
-import { useRouter } from 'expo-router';
-import { supabase } from '@/lib/supabase';
-import OrderCard from '@/components/OrderCard';
+import React, { useState, useEffect } from 'react';
+import { View, StyleSheet, FlatList, RefreshControl, Modal, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { supabase } from '@/lib/supabase';
 import { Database } from '@/types/supabase';
+import OrderCard from '@/components/OrderCard';
+import RouteMap from '@/components/RouteMap';
 
 type Order = Database['public']['Tables']['orders']['Row'];
 
 export default function OrdersScreen() {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const router = useRouter();
+  const [refreshing, setRefreshing] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showRouteMap, setShowRouteMap] = useState(false);
 
   const fetchOrders = async () => {
     try {
-      console.log('Fetching orders...');
+      setLoading(true);
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) return;
+
+      console.log('Buscando pedidos para o usuário:', user.id);
       const { data, error } = await supabase
         .from('orders')
         .select('*')
+        .eq('user_id', user.id)
         .in('status', ['pending', 'accepted'])
-        .order('created_at', { ascending: true });
+        .order('created_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching orders:', error);
-        throw error;
+      if (error) throw error;
+      
+      console.log('Pedidos carregados:', data);
+      if (data && data.length > 0) {
+        console.log('Primeiro pedido:', data[0]);
+        console.log('Endereço do primeiro pedido:', data[0].Customer_Address);
       }
-
-      console.log('Fetched orders:', data);
+      
       setOrders(data || []);
     } catch (error) {
-      console.error('Error in fetchOrders:', error);
+      console.error('Error fetching orders:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -40,26 +49,6 @@ export default function OrdersScreen() {
 
   useEffect(() => {
     fetchOrders();
-
-    // Inscreve-se para atualizações em tempo real
-    const subscription = supabase
-      .channel('orders')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'orders',
-        },
-        () => {
-          fetchOrders();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      subscription.unsubscribe();
-    };
   }, []);
 
   const handleRefresh = () => {
@@ -67,17 +56,41 @@ export default function OrdersScreen() {
     fetchOrders();
   };
 
-  const handleStatusChange = (orderId: string, newStatus: string) => {
-    setOrders(orders.map(order => 
-      order.id === orderId ? { ...order, status: newStatus } : order
-    ));
+  const handleStatusChange = async (orderId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: newStatus })
+        .eq('id', orderId);
+
+      if (error) throw error;
+      fetchOrders();
+    } catch (error) {
+      console.error('Error updating order status:', error);
+    }
+  };
+
+  const handleViewRoute = (order: Order) => {
+    console.log('Pedido selecionado para rota:', order);
+    console.log('Endereço do pedido:', order.customer_address);
+    if (!order.customer_address) {
+      console.error('Endereço não encontrado no pedido');
+      return;
+    }
+    setSelectedOrder(order);
+    setShowRouteMap(true);
+  };
+
+  const handleCloseRouteMap = () => {
+    setShowRouteMap(false);
+    setSelectedOrder(null);
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <MaterialIcons name="local-shipping" size={48} color="#2ecc71" />
-        <Text style={styles.loadingText}>Carregando pedidos...</Text>
+      <View style={styles.centerContainer}>
+        <MaterialIcons name="hourglass-empty" size={48} color="#666" />
+        <Text style={styles.emptyText}>Carregando pedidos...</Text>
       </View>
     );
   }
@@ -87,20 +100,41 @@ export default function OrdersScreen() {
       <FlatList
         data={orders}
         renderItem={({ item }) => (
-          <OrderCard order={item} onStatusChange={handleStatusChange} />
+          <OrderCard
+            order={item}
+            onStatusChange={handleStatusChange}
+            onViewRoute={handleViewRoute}
+          />
         )}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id.toString()}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={['#1976d2']}
+          />
         }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
+          <View style={styles.centerContainer}>
             <MaterialIcons name="receipt-long" size={48} color="#666" />
             <Text style={styles.emptyText}>Nenhum pedido disponível</Text>
           </View>
         }
       />
+
+      <Modal
+        visible={showRouteMap}
+        animationType="slide"
+        onRequestClose={handleCloseRouteMap}
+      >
+        {selectedOrder && selectedOrder.customer_address && (
+          <RouteMap
+            destinationAddress={selectedOrder.customer_address}
+            onClose={handleCloseRouteMap}
+          />
+        )}
+      </Modal>
     </View>
   );
 }
@@ -113,26 +147,15 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
   },
-  loadingContainer: {
+  centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
+    padding: 16,
   },
   emptyText: {
-    marginTop: 16,
     fontSize: 16,
     color: '#666',
+    marginTop: 8,
   },
 }); 

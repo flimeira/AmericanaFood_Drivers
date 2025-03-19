@@ -14,7 +14,7 @@ export interface Database {
           id: string
           created_at: string
           order_number: string
-          Customer_Address: string
+          customer_address: string
           restaurant_name: string
           total_amount: number
           status: 'pending' | 'accepted' | 'rejected' | 'delivered'
@@ -26,7 +26,7 @@ export interface Database {
           id?: string
           created_at?: string
           order_number: string
-          Customer_Address: string
+          customer_address: string
           restaurant_name: string
           total_amount: number
           status?: 'pending' | 'accepted' | 'rejected' | 'delivered'
@@ -38,7 +38,7 @@ export interface Database {
           id?: string
           created_at?: string
           order_number?: string
-          Customer_Address?: string
+          customer_address?: string
           restaurant_name?: string
           total_amount?: number
           status?: 'pending' | 'accepted' | 'rejected' | 'delivered'
