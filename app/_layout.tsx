@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Slot, useSegments, useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useAuth } from '@/hooks/useAuth';
+import { AuthProvider, useAuth } from '@/lib/auth';
+import { useState } from 'react';
 
 // Keep the splash screen visible while we fetch resources
 SplashScreen.preventAutoHideAsync();
 
-const RootLayout = () => {
+const RootLayoutNav = () => {
   const colorScheme = useColorScheme();
   const { session, loading } = useAuth();
   const segments = useSegments();
@@ -31,11 +32,17 @@ const RootLayout = () => {
       router.replace('/login');
     } else if (session && inAuthGroup) {
       // Redirect to home if authenticated and trying to access auth screens
-      router.replace('/(tabs)');
+      router.replace('/(app)');
     }
   }, [session, loading, segments, isReady]);
 
   return <Slot />;
 };
 
-export default RootLayout;
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <RootLayoutNav />
+    </AuthProvider>
+  );
+}
